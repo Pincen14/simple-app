@@ -2,10 +2,9 @@
 pipeline {
     agent any
 
-    environment {
-        IMAGE_NAME = 'USERNAME_DOCKERHUB/simple-app'
-    }
-
+   environment {
+    IMAGE_NAME = 'pincen14/simple-app'
+}
     stages {
         stage('Checkout') {
             steps {
