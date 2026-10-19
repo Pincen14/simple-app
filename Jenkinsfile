@@ -2,9 +2,10 @@
 pipeline {
     agent any
 
-   environment {
-    IMAGE_NAME = 'pincen14/simple-app'
-}
+    environment {
+        IMAGE_NAME = 'vincenttt14/simple-app'
+    }
+
     stages {
         stage('Checkout') {
             steps {
@@ -34,20 +35,50 @@ pipeline {
                     )
                 ]) {
                     powershell '''
-                        $env:DH_TOKEN | docker login --username $env:DH_USER --password-stdin
-                        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+                        $psi = New-Object System.Diagnostics.ProcessStartInfo
+                        $psi.FileName = "docker.exe"
+                        $psi.Arguments = "login --username $env:DH_USER --password-stdin"
+                        $psi.UseShellExecute = $false
+                        $psi.RedirectStandardInput = $true
+                        $psi.RedirectStandardOutput = $true
+                        $psi.RedirectStandardError = $true
+
+                        $p = [System.Diagnostics.Process]::Start($psi)
+                        $p.StandardInput.Write($env:DH_TOKEN)
+                        $p.StandardInput.Close()
+
+                        $output = $p.StandardOutput.ReadToEnd()
+                        $errorOutput = $p.StandardError.ReadToEnd()
+                        $p.WaitForExit()
+
+                        if ($p.ExitCode -ne 0) {
+                            throw "Docker login gagal: $errorOutput"
+                        }
+
+                        Write-Host "Docker login berhasil"
 
                         $image = "$($env:IMAGE_NAME):$($env:BUILD_NUMBER)"
+                        $latest = "$($env:IMAGE_NAME):latest"
 
-                        docker push $image
-                        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+                        try {
+                            docker push $image
+                            if ($LASTEXITCODE -ne 0) {
+                                throw "Docker push gagal"
+                            }
 
-                        docker tag $image "$($env:IMAGE_NAME):latest"
+                            docker tag $image $latest
+                            if ($LASTEXITCODE -ne 0) {
+                                throw "Docker tag gagal"
+                            }
 
-                        docker push "$($env:IMAGE_NAME):latest"
-                        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-                        docker logout
+                            docker push $latest
+                            if ($LASTEXITCODE -ne 0) {
+                                throw "Push latest gagal"
+                            }
+                        }
+                        finally {
+                            docker logout
+                        }
                     '''
                 }
             }
